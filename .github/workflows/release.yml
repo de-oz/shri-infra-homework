@@ -30,3 +30,35 @@ jobs:
           docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}
           docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}_latest
 
+  create_tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/${{github.run_number}}
+
+      - name: Push tag
+        uses: EndBug/latest-tag@latest
+        with:
+          tag-name: ${{github.run_number}}
+
+  create_issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set current date as env variable
+        run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+
+      - name: Create an issue
+        uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ github.token }}
+          title: Release ${{github.run_number}}
+          body: |
+            ## Release ${{github.run_number}}: Issue:
+            
+            - Date: ${{env.NOW}}
+            - Author: ${{ github.triggering_actor }}
+            - Version: ${{ github.run_number }}
+            - Commits:
+            - YCR Docker Image: cr.yandex/${{secrets.YC_REGISTRY_ID}}/app:${{ github.run_number }}
