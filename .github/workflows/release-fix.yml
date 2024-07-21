@@ -6,10 +6,6 @@ on:
       release_version:
         description: 'Release version'
         required: true
-      issue-number:
-        type: number
-        required: true
-        description: "Issue number"
   
 jobs:
   lint_and_test:
