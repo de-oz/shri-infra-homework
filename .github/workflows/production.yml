@@ -4,110 +4,46 @@ run-name: ${{ github.actor }} is shipping to production
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: 'Release version'
+      version:
+        type: string
         required: true
-
-permissions:
-  contents: write
-  issues: write
+        description: "Version to release"
 
 jobs:
-  lint:
+  run_docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-      - run: npm ci
-      - run: npm run lint
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-      - run: npm ci
-      - run: npm run test
-
-  create_release_branch:
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-      - name: Create release branch
-        run: |
-          git checkout -b release/${{ github.run_number }}
-          git push origin release/${{ github.run_number }}
-
-  create_release_docker:
-    needs: [create_release_branch]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: SSH and deploy to prod
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          ref: release/${{github.run_number}}
-
-      - name: Login to Yandex Container Registry
-        run: |
-          echo ${{ secrets.AUTH_TOKEN }} | docker login --username oauth --password-stdin cr.yandex
-
-      - name: Create Docker image
-        run: |
-          docker build -t cr.yandex/${{secrets.REGISTRY_ID}}/my-first-registry:${{ github.run_number }} .
-          docker push cr.yandex/${{secrets.REGISTRY_ID}}/my-first-registry:${{ github.run_number }}
-
-      - name: Create Docker image latest
-        run: |
-          docker build -t cr.yandex/${{secrets.YANDEX_REGISTRY_ID}}/my-first-registry:${{ github.run_number }}_latest .
-          docker push cr.yandex/${{secrets.YANDEX_REGISTRY_ID}}/my-first-registry:${{ github.run_number }}_latest
-
-  create_tag:
-    needs: [create_release_branch]
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo usermod -aG docker ${USER}
+            docker login --username oauth --password ${{ secrets.AUTH_TOKEN }} cr.yandex
+            docker pull cr.yandex/${{secrets.REGISTRY_ID}}/app:${{ inputs.version }}_latest
+            docker kill $(docker ps -q)
+            docker rm $(docker ps -a -q)
+            docker run -d --restart unless-stopped -p 3000:3000 cr.yandex/${{secrets.REGISTRY_ID}}/app:${{ inputs.version }}_latest
+  
+  add_issue_comment:
+    needs: [run_docker]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout release branch
+        uses: actions/checkout@v4.1.7
         with:
-          ref: release/${{github.run_number}}
-      - name: Push tag
-        uses: EndBug/latest-tag@latest
-        with:
-          tag-name: ${{github.run_number}}
+          ref: release/${{ inputs.version }}
 
-  create_issue:
-    needs: [lint, test]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-      - name: Set current date as env variable
-        run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
-
-      - name: Create GitHub issue
+      - name: Add issue comment
         run: |
-          touch issue_temp.txt
-          echo "**Version:** ${{ github.run_number }}" >> issue_temp.txt
-          echo "**Date:** ${{ env.NOW }}" >> issue_temp.txt
-          echo "**Triggering actor:** ${{ github.triggering_actor }}" >> issue_temp.txt
-          echo "**Docker image:** cr.yandex/${{ secrets.REGISTRY_ID }}/my-first-registry:${{ github.run_number }}" >> issue_temp.txt
-          gh issue create --title "Version ${{ github.run_number }} deployment" --body-file issue_temp.txt
-          rm issue_temp.txt
+          touch $ISSUE
+          echo "**Deploy to production**" >> $ISSUE
+          echo "- Date: $(date)" >> $ISSUE
+          echo "- Author: ${{ github.triggering_actor }}" >> $ISSUE
+          number=$(gh issue list --label "release ${{ inputs.version }}" --json number --jq '.[0].number')
+          gh issue comment "$number" --body-file "$ISSUE"
+          rm $ISSUE
         env:
-          FILE: issue_temp.txt
-
-  deploy:
-    needs: [create_release_docker]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up SSH
-        run: |
-          echo "${{ secrets.SSH_KEY }}" > key.pem
-          chmod 600 key.pem
-
-      - name: Deploy Docker image
-        run: |
-          ssh -i key.pem -o StrictHostKeyChecking=no yc-user@${{ secrets.SSH_HOST }} "
-          echo ${{ secrets.AUTH_TOKEN }} | docker login --username oauth --password-stdin cr.yandex &&
-          docker pull cr.yandex/${{ secrets.REGISTRY_ID }}/my-first-registry:${{ github.run_number }}_latest &&
-          docker run -d -p 3000:3000 cr.yandex/${{ secrets.REGISTRY_ID }}/my-first-registry:${{ github.run_number }}_latest
-          "
+          ISSUE: issue.txt
