@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version'
+        type: string
         required: true
+        description: "Version to release"
+      issue-number:
+        type: number
+        required: true
+        description: "Issue number id"
 
-permissions:
-  contents: write
-  issues: write
-  
 jobs:
   lint_and_test:
     uses: ./.github/workflows/lint-test.yml
@@ -48,20 +49,21 @@ jobs:
         with:
           tag-name: ${{github.run_number}}
 
-  create_issue:
+  add_comment:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Write the date to the env variable
+      - name: Write date into a variable
         run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
 
-      - name: Create an issue
+      - name: Add comment
         uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ github.event.inputs.issue_number }}
+          issue-number: ${{inputs.issue-number}}
           body: |
             **Fix**:
-            - Date: ${{ env.NOW }}
+            - Date: ${{env.NOW}}
             - Author: ${{ github.triggering_actor }}
-            - Version: ${{ inputs.release_version }}_fix${{ github.run_number }}
+            - Version: ${{ github.run_number }}
             - Commits:
-            - YC Docker: cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ inputs.release_version }}_fix${{ github.run_number }}
+            - YCR Docker Image: cr.yandex/${{secrets.REGISTRY_ID}}/app:${{ inputs.release_version }}_fix${{ github.run_number }}
