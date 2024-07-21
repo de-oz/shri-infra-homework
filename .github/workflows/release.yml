@@ -1,0 +1,32 @@
+name: Make a release
+run-name: ${{ github.actor }} is making a release
+on:
+  workflow_dispatch:
+  
+jobs:
+  lint_and_test:
+    uses: ./.github/workflows/lint-test.yml
+
+  create_branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Create release branch
+        run: |
+          git checkout -b release/${{ github.run_number }}
+          git push origin release/${{ github.run_number }}
+
+      - name: Build docker image
+        run: docker build -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }} -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}_latest .
+
+      - name: Push Docker image
+        run: |
+          echo ${{ secrets.AUTH_TOKEN }} | docker login cr.yandex -u oauth --password-stdin
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}_latest
+
