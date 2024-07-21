@@ -3,6 +3,7 @@ run-name: ${{ github.actor }} is making linting and testing checks
 on:
   pull_request:
     branches: [ "main" ]
+  workflow_call:
 
 jobs:
   lint:
