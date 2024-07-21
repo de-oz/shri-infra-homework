@@ -8,7 +8,7 @@
     "test": "jest",
     "lint": "eslint ./src",
     "build:docker": "docker build -t shri-infra .",
-    "start:docker": "docker run -it -p 3000:3000 -v $(pwd):/app -v /app/node_modules --rm shri-infra"
+    "start:docker": "docker run --name app -p 3000:3000 --rm shri-infra"
   },
   "dependencies": {
     "@bem-react/classname": "^1.6.0",
