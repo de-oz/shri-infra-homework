@@ -1,0 +1,63 @@
+name: Make a fix
+run-name: ${{ github.actor }} is fixing a release
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version'
+        required: true
+  
+jobs:
+  lint_and_test:
+    uses: ./.github/workflows/lint-test.yml
+
+  fix_release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: release/${{ inputs.release_version }}
+
+      - name: Login to Yandex Container Registry
+        run: |
+          echo ${{ secrets.AUTH_TOKEN }} | docker login --username oauth --password-stdin cr.yandex
+
+      - name: Create Docker image Fix
+        run: |
+          docker build -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ inputs.release_version }}_fix${{ github.run_number }} .
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ inputs.release_version }}_fix${{ github.run_number }}
+
+      - name: Create Docker image Latest
+        run: |
+          docker build -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ inputs.release_version }}_latest .
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ inputs.release_version }}_latest
+
+  create_tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/${{github.run_number}}
+
+      - name: Push tag
+        uses: EndBug/latest-tag@latest
+        with:
+          tag-name: ${{github.run_number}}
+
+  create_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the date to the env variable
+        run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+
+      - name: Create an issue
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.inputs.issue_number }}
+          body: |
+            **Fix**:
+            - Date: ${{ env.NOW }}
+            - Author: ${{ github.triggering_actor }}
+            - Version: ${{ inputs.release_version }}_fix${{ github.run_number }}
+            - Commits:
+            - YC Docker: cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ inputs.release_version }}_fix${{ github.run_number }}
