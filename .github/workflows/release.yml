@@ -27,6 +27,6 @@ jobs:
       - name: Push Docker image
         run: |
           echo ${{ secrets.AUTH_TOKEN }} | docker login cr.yandex -u oauth --password-stdin
-          docker push cr.yandex/${{ secrets.YANDEX_REGISTRY_ID }}/app:${{ github.run_number }}
-          docker push cr.yandex/${{ secrets.YANDEX_REGISTRY_ID }}/app:${{ github.run_number }}_latest
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.run_number }}_latest
 
