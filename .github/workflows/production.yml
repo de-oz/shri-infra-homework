@@ -1,0 +1,50 @@
+name: Ship to production
+run-name: ${{ github.actor }} is shipping to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        required: true
+        description: "Version to release"
+
+jobs:
+  connect_and_deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: SSH and deploy to prod
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo usermod -aG docker ${USER}
+            docker login --username oauth --password ${{ secrets.AUTH_TOKEN }} cr.yandex
+            docker pull cr.yandex/${{secrets.REGISTRY_ID}}/app:${{ inputs.version }}_latest
+            docker kill $(docker ps -q)
+            docker rm $(docker ps -a -q)
+            docker run -d --restart unless-stopped -p 3000:3000 cr.yandex/${{secrets.REGISTRY_ID}}/app:${{ inputs.version }}_latest
+  
+  add_issue_comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v3
+        with:
+          ref: release/${{ inputs.version }}
+
+      - name: Add issue comment
+        run: |
+          touch $ISSUE
+          echo "**Deploy to production**" >> $ISSUE
+          echo "- Date: $(date)" >> $ISSUE
+          echo "- Author: ${{ github.triggering_actor }}" >> $ISSUE
+          number=$(gh issue list --label "release ${{ inputs.version }}" --json number --jq '.[0].number')
+          gh issue comment "$number" --body-file "$ISSUE"
+          rm $ISSUE
+        env:
+          ISSUE: issue.txt
+  
