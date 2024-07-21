@@ -53,7 +53,6 @@ jobs:
       - name: Create an issue
         uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ github.event.inputs.issue_number }}
           body: |
             **Fix**:
             - Date: ${{ env.NOW }}
