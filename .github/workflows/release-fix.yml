@@ -6,6 +6,10 @@ on:
       release_version:
         description: 'Release version'
         required: true
+
+permissions:
+  contents: write
+  issues: write
   
 jobs:
   lint_and_test:
@@ -53,6 +57,7 @@ jobs:
       - name: Create an issue
         uses: peter-evans/create-or-update-comment@v4
         with:
+          issue-number: ${{ github.event.inputs.issue_number }}
           body: |
             **Fix**:
             - Date: ${{ env.NOW }}
